@@ -3,6 +3,16 @@
 import "./lib/nodarkreader.min.js"
 import dayjs from "https://cdn.skypack.dev/dayjs";
 
+
+let global = {
+	username: ""
+}
+
+const audio = {
+	["message-received"]: new Audio("message-received.wav"),
+	["bop"]: new Audio("bop.wav"),
+}
+
 /** @typedef {{ matched: boolean, vars: Record<string,string>}} Theme */
 /** @type {Record<string, Theme>} */
 const themes = {
@@ -59,7 +69,7 @@ const $messaging_data = document.getElementById("messaging_data")
 const $messaging_button = document.getElementById("messaging_button")
 const $chat_area = document.getElementById("chat_area")
 const $toggle_theme = document.getElementById("toggle_theme")
-const $root = document.querySelector(":root");
+const $root = document.querySelector(":root")
 
 /**
  * @param {WebSocket} socket
@@ -119,16 +129,19 @@ function MaterializeMessage(username, timestamp, body) {
  * @param {string} timestamp
  * @param {string} body
  */
-function on_message(username, timestamp, body) {
+async function on_message(username, timestamp, body) {
     MaterializeMessage(username, timestamp, body)
+	if (username !== global.username) {
+		await audio["message-received"].play()	
+	}
 }
 
 document.addEventListener("DOMContentLoaded", (e) => {
     [selected_theme] = Object.entries(themes).find(([theme, props]) => props.matched)
     change_theme(selected_theme)
 
-    let username = window.prompt("what is your username");
-    let socket = new WebSocket(`ws://${window.location.hostname}:8081/greeter?username=${username}`)
+    global.username = window.prompt("what is your username") ?? "";
+    let socket = new WebSocket(`ws://${window.location.hostname}:8081/greeter?username=${global.username}`)
 
     document.onkeydown = e => {
         if (e.key === "Enter" && document.activeElement === $messaging_data) {
@@ -166,15 +179,15 @@ document.addEventListener("DOMContentLoaded", (e) => {
     };
 
     socket.onclose = event => {
-        if (event.wasClean) {
-            MaterializeMessage("[server]", event.data.timestamp, `[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`)
-        } else {
-            // server process killed or network down, event.code is *usually* 1006 in this case
-            MaterializeMessage("[server]", event.data.timestamp, "[close] Connection died")
-        }
+        // if (event.wasClean) {
+        //     MaterializeMessage("[server]", event.data.timestamp, `[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`)
+        // } else {
+        //     // server process killed or network down, event.code is *usually* 1006 in this case
+        //     MaterializeMessage("[server]", event.data.timestamp, "[close] Connection died")
+        // }
     };
 
     socket.onerror = error => {
-        MaterializeMessage("[server]", error?.data?.timestamp ?? dayjs().format("hh:mma"), `[error] ${error.message}`)
+        // MaterializeMessage("[server]", error.data.timestamp ?? dayjs().format("hh:mma"), `[error] ${error.message}`)
     };
 })
