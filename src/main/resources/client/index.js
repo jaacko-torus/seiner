@@ -10,7 +10,7 @@ let global = {
 
 const audio = {
 	["message-received"]: new Audio("message-received.wav"),
-	["bop"]: new Audio("bop.wav"),
+	["poke"]: new Audio("poke.wav"),
 }
 
 /** @typedef {{ matched: boolean, vars: Record<string,string>}} Theme */
@@ -131,7 +131,10 @@ function MaterializeMessage(username, timestamp, body) {
  */
 async function on_message(username, timestamp, body) {
     MaterializeMessage(username, timestamp, body)
-	if (username !== global.username) {
+	
+	if (body.match(new RegExp(`\/poke ${global.username}`))?.length === 1) {
+		await audio["poke"].play()
+	} else if (username !== global.username) {
 		await audio["message-received"].play()	
 	}
 }
