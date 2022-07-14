@@ -13,8 +13,8 @@ object Program {
     val parser = {
       import builder._
       OParser.sequence(
-        programName("driver"),
-        head("driver", "0.1.0"),
+        programName("seiner"),
+        head("seiner", "0.1.0"),
         version('v', "version"),
         help('h', "help"),
         opt[Int]("port-http")
