@@ -128,7 +128,7 @@ document.addEventListener("DOMContentLoaded", (e) => {
     change_theme(selected_theme)
 
     let username = window.prompt("what is your username");
-    let socket = new WebSocket(`ws://${window.location.origin}:8081/greeter?username=${username}`)
+    let socket = new WebSocket(`ws://${window.location.hostname}:8081/greeter?username=${username}`)
 
     document.onkeydown = e => {
         if (e.key === "Enter" && document.activeElement === $messaging_data) {
