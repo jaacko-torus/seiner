@@ -20,9 +20,8 @@ object UserActor {
     case class UserJoined(username: String, actor: ActorRef)(implicit
         datetime: DateTime
     ) extends Event(datetime)
-    case class UserLeft(username: String)(implicit datetime: DateTime)
-        extends Event(datetime)
-    case class UserSentMessage(username: String, message: String)(implicit
+    case class UserLeft(username: String)(implicit datetime: DateTime) extends Event(datetime)
+    case class UserSentMessage(username: String, messages: Vector[String])(implicit
         datetime: DateTime
     ) extends Event(datetime)
   }
@@ -41,8 +40,12 @@ class UserActor extends Actor {
     case event: Event.UserLeft =>
       users -= event.username
       broadcast(event)
-    case event: Event.UserSentMessage =>
+    case event: Event.UserSentMessage => {
+      println("message received")
+      println(event)
+
       broadcast(event)
+    }
   }
 
   def broadcast(data: Event): Unit = {

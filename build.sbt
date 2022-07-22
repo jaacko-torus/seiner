@@ -1,13 +1,64 @@
 import com.typesafe.config.ConfigFactory
 
+import scala.sys.process._
 import java.io.File
+import scala.language.dynamics
+
+val conf = ConfigFactory.parseFile(new File("src/main/resources/application.conf"))
+
+lazy val mode = taskKey[String]("Mode")
+lazy val curr_mode = taskKey[Map[String, Any]]("Modes")
+
+mode := conf.getString("seiner.mode")
+curr_mode := Map(
+  "port.http" -> conf.getInt(s"seiner.modes.${mode.value}.port.http"),
+  "port.ws" -> conf.getInt(s"seiner.modes.${mode.value}.port.ws"),
+  "interface" -> conf.getString(s"seiner.modes.${mode.value}.interface"),
+  "client-source" -> conf.getString(s"seiner.modes.${mode.value}.client-source"),
+  "interactive" -> conf.getBoolean(s"seiner.modes.${mode.value}.interactive")
+)
+
+lazy val buildClient = taskKey[Unit]("Build client")
+buildClient := {
+  val s = streams.value
+
+  val platform =
+    if (sys.props("os.name").contains("Windows"))
+      "windows"
+    else
+      "linux"
+
+  val shell = platform match {
+    case "windows" => Seq("cmd", "/c")
+    case "linux"   => Seq("bash", "-c")
+  }
+
+  val pipeline = Map(
+    "echo cd" -> s"echo ${curr_mode.value("client-source")}",
+    "change dir" -> s"cd ${curr_mode.value("client-source")}",
+    "echo" -> (platform match {
+      case "windows" => "echo %cd%"
+      case "linux"   => "pwd"
+    }),
+    "install" -> "npm install",
+    // test -> "npm run test",
+    // lint -> "npm run lint",
+    "build" -> "npm run build"
+  ).values.reduce((cmd1, cmd2) => s"$cmd1 && $cmd2")
+
+  s.log.info("Building client...")
+
+  if ((shell :+ pipeline !) == 0) {
+    s.log.success("frontend build successful!")
+  } else {
+    throw new IllegalStateException("frontend build failed!")
+  }
+}
 
 val deps = new {
   val akka = "2.6.8"
   val akkaHttp = "10.2.9"
 }
-
-val conf = ConfigFactory.parseFile(new File("src/main/resources/application.conf"))
 
 ThisBuild / scalaVersion := "2.13.8"
 
@@ -17,6 +68,12 @@ ThisBuild / organizationName := conf.getString("seiner.build.organizationName")
 ThisBuild / licenses := Seq("MIT" -> url("https://mit-license.org"))
 
 ThisBuild / mainClass := Some(s"$organization.Program")
+
+Compile / compile := (Compile / compile).dependsOn(buildClient).value //.withCachedResolution(true)
+unmanagedResources / excludeFilter := {
+  val client = ((Compile / resourceDirectory).value / "seiner-client").getCanonicalPath
+  new SimpleFileFilter(_.getCanonicalPath startsWith client)
+}
 
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging)

@@ -17,14 +17,31 @@ object Program {
         head("seiner", "0.1.0"),
         version('v', "version"),
         help('h', "help"),
+        opt[String]("mode")
+          .action((mode, c) => {
+            curr_mode = conf.mode match {
+              case "dev"      => conf.modes.dev
+              case "prod" | _ => conf.modes.prod
+            }
+
+            c.copy(
+              mode = mode,
+              port_http = curr_mode.port.http,
+              port_ws = curr_mode.port.ws,
+              interface = curr_mode.interface,
+              client_source = curr_mode.client_source,
+              interactive = curr_mode.interactive
+            )
+          })
+          .text(s"(default: false) use local settings"),
         opt[Int]("port-http")
           .action((port_http, c) => c.copy(port_http = port_http))
           .text(
-            s"(default: ${env.port.http}) port for the client HTTP service (e.x.: 80, 8080, 9000)"
+            s"(default: ${curr_mode.port.http}) port for the client HTTP service (e.x.: 80, 8080, 9000)"
           ),
         opt[Int]("port-ws")
           .action((port_ws, c) => c.copy(port_ws = port_ws))
-          .text(s"(default: ${env.port.ws}) port for the client WS service"),
+          .text(s"(default: ${curr_mode.port.ws}) port for the client WS service"),
         opt[String]("interface")
           .abbr("i")
           .action((interface, c) => c.copy(interface = interface))
@@ -38,7 +55,7 @@ object Program {
             }
           )
           .text(
-            s"(default: ${env.interface}) interface address (e.x.: 0.0.0.0, localhost, 127.0.0.1)"
+            s"(default: ${curr_mode.interface}) interface address (e.x.: 0.0.0.0, localhost, 127.0.0.1)"
           ),
         opt[String]("client-source")
           .abbr("cs")
@@ -51,24 +68,11 @@ object Program {
             }
           )
           .text(
-            s"(default: ${env.client_source}) directory to be considered the client root. It should have an `index.html` file inside"
+            s"(default: ${curr_mode.client_source}) directory to be considered the client root. It should have an `index.html` file inside"
           ),
         opt[Boolean]("interactive")
           .action((interactive, c) => c.copy(interactive = interactive))
-          .text(s"(default: ${env.interactive}) server in interactive mode"),
-        opt[Unit]("local")
-          .action((_, c) => {
-            val env = conf.local
-            c.copy(
-              local = true,
-              port_http = env.port.http,
-              port_ws = env.port.ws,
-              interface = env.interface,
-              client_source = env.client_source,
-              interactive = env.interactive
-            )
-          })
-          .text(s"(default: false) use local settings")
+          .text(s"(default: ${curr_mode.interactive}) server in interactive mode")
       )
     }
 
@@ -92,12 +96,12 @@ object Program {
   }
 
   case class CLIConfig(
-      local: Boolean = false,
-      port_http: Int = env.port.http,
-      port_ws: Int = env.port.ws,
-      interface: String = env.interface,
-      client_source: String = env.client_source,
-      interactive: Boolean = env.interactive
+      mode: String = conf.mode,
+      port_http: Int = curr_mode.port.http,
+      port_ws: Int = curr_mode.port.ws,
+      interface: String = curr_mode.interface,
+      client_source: String = curr_mode.client_source,
+      interactive: Boolean = curr_mode.interactive
   )
 
   object conf {
@@ -108,33 +112,40 @@ object Program {
         ws: Int
     )
 
-    case class Environment(
+    case class Mode(
         port: Port,
         interface: String,
         client_source: String,
         interactive: Boolean
     )
 
-    val local = Environment(
-      port = Port(
-        http = app_conf.getInt("seiner.local.port.http"),
-        ws = app_conf.getInt("seiner.local.port.ws")
-      ),
-      interface = app_conf.getString("seiner.local.interface"),
-      client_source = app_conf.getString("seiner.local.client-source"),
-      interactive = app_conf.getBoolean("seiner.local.interactive")
-    )
+    val mode = app_conf.getString("seiner.mode")
 
-    val deploy = Environment(
-      port = Port(
-        http = app_conf.getInt("seiner.deploy.port.http"),
-        ws = app_conf.getInt("seiner.deploy.port.ws")
-      ),
-      interface = app_conf.getString("seiner.deploy.interface"),
-      client_source = app_conf.getString("seiner.deploy.client-source"),
-      interactive = app_conf.getBoolean("seiner.deploy.interactive")
-    )
+    object modes {
+      val dev = Mode(
+        port = Port(
+          http = app_conf.getInt("seiner.modes.dev.port.http"),
+          ws = app_conf.getInt("seiner.modes.dev.port.ws")
+        ),
+        interface = app_conf.getString("seiner.modes.dev.interface"),
+        client_source = app_conf.getString("seiner.modes.dev.client-source"),
+        interactive = app_conf.getBoolean("seiner.modes.dev.interactive")
+      )
+
+      val prod = Mode(
+        port = Port(
+          http = app_conf.getInt("seiner.modes.prod.port.http"),
+          ws = app_conf.getInt("seiner.modes.prod.port.ws")
+        ),
+        interface = app_conf.getString("seiner.modes.prod.interface"),
+        client_source = app_conf.getString("seiner.modes.prod.client-source"),
+        interactive = app_conf.getBoolean("seiner.modes.prod.interactive")
+      )
+    }
   }
 
-  val env = conf.deploy
+  var curr_mode = conf.mode match {
+    case "dev"  => conf.modes.dev
+    case "prod" => conf.modes.prod
+  }
 }

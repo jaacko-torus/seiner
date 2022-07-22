@@ -46,12 +46,12 @@ class WS(
   val userActorSource: Source[Event, ActorRef] = {
     val completionMatcher: PartialFunction[Any, CompletionStrategy] = {
       case akka.actor.Status.Success(s: CompletionStrategy) => s
-      case akka.actor.Status.Success(_) => CompletionStrategy.draining
-      case akka.actor.Status.Success    => CompletionStrategy.draining
+      case akka.actor.Status.Success(_)                     => CompletionStrategy.draining
+      case akka.actor.Status.Success                        => CompletionStrategy.draining
     }
 
-    val failureMatcher: PartialFunction[Any, Throwable] = {
-      case akka.actor.Status.Failure(cause) => cause
+    val failureMatcher: PartialFunction[Any, Throwable] = { case akka.actor.Status.Failure(cause) =>
+      cause
     }
 
     Source.actorRef[Event](
@@ -67,78 +67,84 @@ class WS(
 
   def service(username: String): Flow[Message, TextMessage, ActorRef] =
     Flow.fromGraph(GraphDSL.create(userActorSource) {
-      implicit builder: GraphDSL.Builder[ActorRef] =>
-        (userActor: Source[Event, ActorRef]#Shape) =>
-          import GraphDSL.Implicits._
+      implicit builder: GraphDSL.Builder[ActorRef] => (userActor: Source[Event, ActorRef]#Shape) =>
+        import GraphDSL.Implicits._
 
-          implicit val datetime: DateTime = DateTime.now()
+        implicit val datetime: DateTime = DateTime.now()
 
-          val materialization: PortOps[Event] =
-            builder.materializedValue.map(userActorRef =>
-              Event.UserJoined(username, userActorRef)
-            )
+        val materialization: PortOps[Event] =
+          builder.materializedValue.map(userActorRef => Event.UserJoined(username, userActorRef))
 
-          val merger: UniformFanInShape[Event, Event] =
-            builder.add(Merge[Event](2))
+        val merger: UniformFanInShape[Event, Event] =
+          builder.add(Merge[Event](2))
 
-          val messageToEvent: FlowShape[Message, Event] =
-            builder.add(Flow[Message].map {
-              case TextMessage.Strict(message) if message.trim != "" =>
-                Event.UserSentMessage(username, message)
-              case _ => Event.None()
-            })
+        import spray.json._
+        import spray.json.DefaultJsonProtocol._
 
-          import spray.json._
-          import DefaultJsonProtocol._
+        // TODO: get rid of spray.json, and replace with circe
 
-          val eventToMessage: FlowShape[Event, TextMessage] =
-            builder.add(Flow[Event].map {
-              case event: Event.UserSentMessage =>
-                TextMessage(
-                  JsObject(
-                    "type" -> JsString("message"),
-                    "data" -> JsObject(
-                      "username" -> event.username.toJson,
-                      "message" -> event.message.toJson,
-                      "timestamp" -> event.timestamp.toJson
-                    )
-                  ).toString
-                )
-              case event: Event.UserJoined =>
-                TextMessage(
-                  JsObject(
-                    "type" -> JsString("user_joined"),
-                    "data" -> JsObject(
-                      "username" -> event.username.toJson,
-                      "timestamp" -> event.timestamp.toJson
-                    )
-                  ).toString
-                )
-              case event: Event.UserLeft =>
-                TextMessage(
-                  JsObject(
-                    "type" -> JsString("user_left"),
-                    "data" -> JsObject(
-                      "username" -> event.username.toJson,
-                      "timestamp" -> event.timestamp.toJson
-                    )
-                  ).toString
-                )
-            })
+        val messageToEvent: FlowShape[Message, Event] =
+          builder.add(Flow[Message].map {
+            case TextMessage.Strict(messages) if messages.trim != "" => {
+              println("TextMessage.Strict")
+              println(messages)
+              Event.UserSentMessage(username, messages.toJson.convertTo[Vector[String]])
+            }
+            case _ => Event.None()
+          })
 
-          val chatroomActorSink: Sink[Event, NotUsed] =
-            Sink.actorRef[Event](
-              chatroomActor,
-              Event.UserLeft(username),
-              Status.Failure
-            )
+        val eventToMessage: FlowShape[Event, TextMessage] =
+          builder.add(Flow[Event].map {
+            case event: Event.UserSentMessage => {
+              println("Event.UserSentMessage")
+              println(event)
 
-          materialization ~> merger
-          messageToEvent ~> merger
-          merger ~> chatroomActorSink
+              TextMessage(
+                JsObject(
+                  "type" -> JsString("message"),
+                  "data" -> JsObject(
+                    "username" -> event.username.toJson,
+                    "messages" -> event.messages.toJson,
+                    "timestamp" -> event.timestamp.toJson
+                  )
+                ).toString
+              )
+            }
+            case event: Event.UserJoined =>
+              TextMessage(
+                JsObject(
+                  "type" -> JsString("user_joined"),
+                  "data" -> JsObject(
+                    "username" -> event.username.toJson,
+                    "timestamp" -> event.timestamp.toJson
+                  )
+                ).toString
+              )
+            case event: Event.UserLeft =>
+              TextMessage(
+                JsObject(
+                  "type" -> JsString("user_left"),
+                  "data" -> JsObject(
+                    "username" -> event.username.toJson,
+                    "timestamp" -> event.timestamp.toJson
+                  )
+                ).toString
+              )
+          })
 
-          userActor ~> eventToMessage
+        val chatroomActorSink: Sink[Event, NotUsed] =
+          Sink.actorRef[Event](
+            chatroomActor,
+            Event.UserLeft(username),
+            Status.Failure
+          )
 
-          FlowShape(messageToEvent.in, eventToMessage.out)
+        materialization ~> merger
+        messageToEvent ~> merger
+        merger ~> chatroomActorSink
+
+        userActor ~> eventToMessage
+
+        FlowShape(messageToEvent.in, eventToMessage.out)
     })
 }
