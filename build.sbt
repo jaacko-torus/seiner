@@ -1,3 +1,4 @@
+import java.util.LinkedHashMap
 import com.typesafe.config.ConfigFactory
 
 import scala.sys.process._
@@ -33,18 +34,21 @@ buildClient := {
     case "linux"   => Seq("bash", "-c")
   }
 
-  val pipeline = Map(
-    "echo cd" -> s"echo ${curr_mode.value("client-source")}",
-    "change dir" -> s"cd ${curr_mode.value("client-source")}",
-    "echo" -> (platform match {
-      case "windows" => "echo %cd%"
-      case "linux"   => "pwd"
-    }),
-    "install" -> "npm install",
-    // test -> "npm run test",
-    // lint -> "npm run lint",
-    "build" -> "npm run build"
-  ).values.reduce((cmd1, cmd2) => s"$cmd1 && $cmd2")
+  val pipeline = collection.immutable
+    .ListMap(
+      "echo target dir" -> s"echo ${curr_mode.value("client-source")}",
+      "change dir" -> s"cd ${curr_mode.value("client-source")}",
+      "echo cd" -> (platform match {
+        case "windows" => "echo %cd%"
+        case "linux"   => "pwd"
+      }),
+      "install" -> "npm install",
+      // test -> "npm run test",
+      // lint -> "npm run lint",
+      "build" -> "npm run build"
+    )
+    .map { case (key, value) => s"echo $key && $value" }
+    .reduce((cmd1, cmd2) => s"$cmd1 && $cmd2")
 
   s.log.info("Building client...")
 

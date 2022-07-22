@@ -10,8 +10,6 @@ import scala.language.existentials
 
 object Server {
   def run(config: Program.CLIConfig): Unit = {
-    println(config)
-
     val bindingFutures = List(
       WS(
         config.interface,

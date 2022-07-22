@@ -17,10 +17,18 @@ object HTTP extends ServiceTrait[Unit, HTTP] {
   )(@unused value: Unit): Route = {
     get {
       (pathEndOrSingleSlash & redirectToTrailingSlashIfMissing(StatusCodes.TemporaryRedirect)) {
-        getFromFile(s"$clientDir/index.html")
+        getFromFile(s"$clientDir/dist/index.html")
       } ~ {
-        getFromDirectory(clientDir)
+        getFromDirectory(s"$clientDir/dist")
       }
+    } ~ pathPrefix("client") {
+      // get {
+      getFromBrowseableDirectory(clientDir)
+      // }
+    } ~ pathPrefix("resources") {
+      // get {
+      getFromBrowseableDirectory(s"$clientDir/..")
+      // }
     }
   }
 

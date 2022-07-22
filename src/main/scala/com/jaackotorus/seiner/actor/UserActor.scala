@@ -40,12 +40,8 @@ class UserActor extends Actor {
     case event: Event.UserLeft =>
       users -= event.username
       broadcast(event)
-    case event: Event.UserSentMessage => {
-      println("message received")
-      println(event)
-
+    case event: Event.UserSentMessage =>
       broadcast(event)
-    }
   }
 
   def broadcast(data: Event): Unit = {

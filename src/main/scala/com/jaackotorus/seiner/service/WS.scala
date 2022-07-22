@@ -85,20 +85,14 @@ class WS(
 
         val messageToEvent: FlowShape[Message, Event] =
           builder.add(Flow[Message].map {
-            case TextMessage.Strict(messages) if messages.trim != "" => {
-              println("TextMessage.Strict")
-              println(messages)
-              Event.UserSentMessage(username, messages.toJson.convertTo[Vector[String]])
-            }
+            case TextMessage.Strict(messages) if messages.trim != "" =>
+              Event.UserSentMessage(username, messages.parseJson.convertTo[Vector[String]])
             case _ => Event.None()
           })
 
         val eventToMessage: FlowShape[Event, TextMessage] =
           builder.add(Flow[Event].map {
-            case event: Event.UserSentMessage => {
-              println("Event.UserSentMessage")
-              println(event)
-
+            case event: Event.UserSentMessage =>
               TextMessage(
                 JsObject(
                   "type" -> JsString("message"),
@@ -109,7 +103,6 @@ class WS(
                   )
                 ).toString
               )
-            }
             case event: Event.UserJoined =>
               TextMessage(
                 JsObject(
