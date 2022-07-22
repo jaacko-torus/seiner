@@ -1,0 +1,3 @@
+[submodule "src/main/resources/seiner-client"]
+	path = src/main/resources/seiner-client
+	url = git@github.com:jaacko-torus/seiner-client.git
